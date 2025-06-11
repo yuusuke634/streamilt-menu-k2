@@ -107,144 +107,7 @@ def clear_database():
 
 
 
-#     # データベースの初期化（初回実行時のみ）
-#     if 'db_initialized' not in st.session_state:
-#         init_db()
-#     st.session_state.db_initialized = True
-#     # --- 食材追加セクション ---
-#     st.header("食材の追加")
-#     with st.form("add_ingredient_form", clear_on_submit=True): # clear_on_submit を使用
-#         col1, col2 = st.columns(2)
-#         submitted = st.form_submit_button("食材を追加")
-#         with col1:
-#             name = st.text_input("食材名:", key="ingredient_name_input")
-#             purchase_date_str = st.text_input("購入日 (YYYY-MM-DD):", value=datetime.now().strftime("%Y-%m-%d"), key="purchase_date_input")
-#         with col2:
-#             expiry_date_str = st.text_input("期限 (YYYY-MM-DD):", value=(datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d"), key="expiry_date_input")
-#             quantity = st.number_input("数量:", min_value=0.01, value=1.0, step=0.1, key="quantity_input")
 
-
-#     if submitted:
-#         if not all([name, purchase_date_str, expiry_date_str, quantity]):
-#             st.warning("すべてのフィールドを入力してください。")
-#         else:
-#             try:
-#                 datetime.strptime(purchase_date_str, "%Y-%m-%d")
-#                 datetime.strptime(expiry_date_str, "%Y-%m-%d")
-#                 add_ingredient_to_db(name, purchase_date_str, expiry_date_str, quantity)
-#                 # clear_on_submit=True を使用しているため、以下の手動リセットは不要になるはずです。
-#                 # st.session_state.ingredient_name_input = ""
-#                 # st.session_state.purchase_date_input = datetime.now().strftime("%Y-%m-%d")
-#                 # st.session_state.expiry_date_input = (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d")
-#                 # st.session_state.quantity_input = 1.0
-#             except ValueError:
-#                 st.error("日付はYYYY-MM-DD形式、数量は数値で入力してください。")
-#     # --- 食材リスト表示セクション ---
-#     st.header("現在の食材リスト")
-#     ingredients_data = get_all_ingredients()
-#     if ingredients_data:
-#     # Pandas DataFrameの作成
-#     # get_all_ingredientsがsqlite3.Rowオブジェクトを返す場合、
-#     # df = pd.DataFrame(ingredients_data) で直接列名が設定される場合があります。
-#     # しかし、明示的にリストのリストとして渡す方が確実です。
-#         data_for_df = []
-#         for row in ingredients_data:
-#             data_for_df.append(list(row)) # sqlite3.Rowオブジェクトをリストに変換
-#     else:
-#         st.info("データベースに食材がありません。")
-#     df_ingredients = pd.DataFrame(data_for_df, columns=["ID", "食材名", "購入日", "期限", "数量"])
-#  # ----------------------------------------------------
-#     # st.data_editor を使用して編集可能なテーブルを表示
-#     # ----------------------------------------------------
-#     edited_df = st.data_editor(df_ingredients,
-#         column_config={
-#             # "ID" 列は表示するが編集不可にする
-#             "ID": st.column_config.NumberColumn(
-#                 "ID",
-#                 help="食材のID",
-#                 disabled=True # 編集不可
-#             ),
-#             # "食材名" 列は表示するが編集不可にする
-#             "食材名": st.column_config.TextColumn(
-#                 "食材名",
-#                 help="食材の名前",
-#                 disabled=True # 編集不可
-#             ),
-#             # "購入日" 列は表示するが編集不可にする
-#             "購入日": st.column_config.DateColumn(
-#                 "購入日",
-#                 help="購入した日付",
-#                 format="YYYY/MM/DD",
-#                 disabled=True # 編集不可
-#             ),
-#             # "期限" 列は表示するが編集不可にする
-#             "期限": st.column_config.DateColumn(
-#                 "期限",
-#                 help="食材の賞味期限または消費期限",
-#                 format="YYYY/MM/DD",
-#                 disabled=True # 編集不可
-#             ),
-#             # "数量" 列だけを編集可能にする
-#             "数量": st.column_config.NumberColumn(
-#                 "数量",
-#                 help="食材の数量",
-#                 min_value=0, # 最小値を設定（必要であれば）
-#                 step=1,     # 編集時の増減ステップ
-#                 format="%d", # 整数のフォーマット
-#                 # editable=True はデフォルトなので明示的に書く必要はないが、
-#                 # disabledでない列はeditableになる
-#             )
-#         },
-#         hide_index=True, # DataFrameのインデックス列を非表示にする
-#         use_container_width=True, # コンテナの幅に合わせて表示
-#         num_rows="fixed", # 行の追加・削除を無効にする
-#         key="ingredient_editor" # セッションステートで参照するためのユニークなキー
-#     )
-
-#     # # ユーザーが編集した内容を検出
-#     # # edited_cellsには、変更されたセルの情報が辞書として格納されます
-#     # if st.session_state.ingredient_editor.edited_cells:
-#     #     st.write("変更を検出しました！")
-#     #     # どのセルが変更されたかを確認
-#     #     # st.session_state.ingredient_editor.edited_cells を直接表示することも可能
-#     #     # st.write(st.session_state.ingredient_editor.edited_cells)
-
-#     #     # 変更された行ごとに処理
-#     #     for row_index, col_changes in st.session_state.ingredient_editor.edited_cells.items():
-#     #         if "数量" in col_changes: # 数量列が変更された場合
-#     #             ingredient_id_to_update = edited_df.loc[row_index, "ID"]
-#     #             new_quantity_value = col_changes["数量"]
-
-#     #             # データベースの更新関数を呼び出す
-#     #             update_ingredient_quantity(ingredient_id_to_update, new_quantity_value)
-
-#     #     # 変更を処理した後、edited_cellsをクリア（これはst.rerun()で自動的にクリアされることが多い）
-#     #     # ただし、確実に状態をリセットしたい場合は手動でクリアすることも検討
-#     #     # st.session_state.ingredient_editor.edited_cells = {}
-#     #     st.rerun() # 変更をデータベースに反映後、UIを最新の状態に更新
-
-#     # 編集前のdf_ingredientsと、編集後のedited_dfを比較して変更箇所を検出
-#     if not df_ingredients.equals(edited_df):
-#         st.write("変更を検出しました！")
-#         for idx in range(len(df_ingredients)):
-#             if df_ingredients.loc[idx, "数量"] != edited_df.loc[idx, "数量"]:
-#                 ingredient_id_to_update = edited_df.loc[idx, "ID"]
-#                 new_quantity_value = edited_df.loc[idx, "数量"]
-#                 update_ingredient_quantity(ingredient_id_to_update, new_quantity_value)
-#         # st.rerun()
-#     else:
-#         st.write("変更はありません。")
-
-#     # # --- 現在の食材リスト表示セクション ---
-#     # st.header("現在の食材")
-#     # ingredients_data = get_all_ingredients()
-#     # if ingredients_data:
-#     # # Streamlitのdataframeは列名を自動で設定しないため、手動で指定
-    
-#     #     df_ingredients = pd.DataFrame(ingredients_data, columns=["ID", "食材名", "購入日", "期限", "数量"])
-#     #     st.dataframe(df_ingredients, use_container_width=True)
-#     # else:
-#     #     st.info("データベースに食材がありません。")
 # --- Streamlit UI ---
 def show_recipe_proposer():
     st.header("献立生成")
@@ -253,8 +116,8 @@ def show_recipe_proposer():
 
     # --- 献立提案セクション ---
     # Google Gemini APIの設定
-    # api_key = st.secrets["GOOGLE_API_KEY"]
-    api_key = os.environ.get("GOOGLE_API_KEY")
+    api_key = st.secrets["GOOGLE_API_KEY"]
+    # api_key = os.environ.get("GOOGLE_API_KEY")
     gemini_configured_successfully = False
     if api_key:
         try:
