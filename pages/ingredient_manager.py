@@ -19,7 +19,7 @@ def init_db():
             name TEXT NOT NULL,
             purchase_date TEXT NOT NULL,
             expiry_date TEXT NOT NULL,
-            quantity REAL NOT NULL
+            quantity TEXT NOT NULL
         )
     """)
     conn.commit()
@@ -169,7 +169,7 @@ def show_ingredient_manager():
                 "食材名": st.column_config.TextColumn("食材名", help="食材の名前", disabled=True),
                 "購入日": st.column_config.DateColumn("購入日", help="購入した日付", format="YYYY/MM/DD", disabled=True),
                 "期限": st.column_config.DateColumn("期限", help="食材の賞味期限または消費期限", format="YYYY/MM/DD", disabled=True),
-                "数量": st.column_config.TextColumn("数量",  disabled=True), # REAL型に合わせて小数点以下2桁表示
+                "数量": st.column_config.TextColumn("数量",  help="食材の数量" , disabled= False), # REAL型に合わせて小数点以下2桁表示
             },
             hide_index=True,
             use_container_width=True,
@@ -188,7 +188,7 @@ def show_ingredient_manager():
                 edited_quantity = st.session_state.edited_ingredients_df.loc[idx, "数量"]
 
                 # 比較時に浮動小数点数の丸め誤差を考慮
-                if abs(original_quantity - edited_quantity) > 0.001: # わずかな差を許容
+                if original_quantity != edited_quantity:
                     ingredient_id_to_update = st.session_state.edited_ingredients_df.loc[idx, "ID"]
                     update_ingredient_quantity(ingredient_id_to_update, edited_quantity)
                     changes_detected = True
@@ -279,7 +279,7 @@ def show_ingredient_manager():
             with col4:
                 st.write(row["期限"])
             with col5:
-                st.write(row["数量"]) # REAL型に合わせて小数点以下2桁表示
+                st.write(row["数量"]) 
             with col6:
                 if st.button("削除", key=f"delete_row_btn_ing_mgr_{row['ID']}"):
                     # ここでは食材名を引数にとる delete_ingredient_from_db を使用
