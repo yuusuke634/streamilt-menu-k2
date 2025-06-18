@@ -2,8 +2,8 @@ import streamlit as st
 import sqlite3
 import pandas as pd
 from PIL import Image
-from google.cloud import vision
-from google.oauth2 import service_account
+# from google.cloud import vision
+# from google.oauth2 import service_account
 import re
 import os
 import json
