@@ -162,44 +162,44 @@ def show_ingredient_manager():
 
         # st.data_editorでデータフレームを表示し、編集を許可する
         # ユーザーが編集を行うと、st.session_state.edited_ingredients_df が更新される
-        # edited_df_from_editor = st.data_editor(
-        #     st.session_state.edited_ingredients_df, # 初期値としてセッションステートの編集済みDataFrameを渡す
-        #     column_config={
-        #         "ID": st.column_config.NumberColumn("ID", help="食材のID", disabled=True),
-        #         "食材名": st.column_config.TextColumn("食材名", help="食材の名前", disabled=True),
-        #         "購入日": st.column_config.DateColumn("購入日", help="購入した日付", format="YYYY/MM/DD", disabled=True),
-        #         "期限": st.column_config.DateColumn("期限", help="食材の賞味期限または消費期限", format="YYYY/MM/DD", disabled=True),
-        #         "数量": st.column_config.TextColumn("数量",  help="食材の数量" , disabled= False), # REAL型に合わせて小数点以下2桁表示
-        #     },
-        #     hide_index=True,
-        #     use_container_width=True,
-        #     num_rows="fixed",
-        #     key="ingredient_editor" # ユニークなキー
-        # )
+        edited_df_from_editor = st.data_editor(
+            st.session_state.edited_ingredients_df, # 初期値としてセッションステートの編集済みDataFrameを渡す
+            column_config={
+                "ID": st.column_config.NumberColumn("ID", help="食材のID", disabled=True),
+                "食材名": st.column_config.TextColumn("食材名", help="食材の名前", disabled=True),
+                "購入日": st.column_config.DateColumn("購入日", help="購入した日付", format="YYYY/MM/DD", disabled=True),
+                "期限": st.column_config.DateColumn("期限", help="食材の賞味期限または消費期限", format="YYYY/MM/DD", disabled=True),
+                "数量": st.column_config.TextColumn("数量",  help="食材の数量" , disabled= False), # REAL型に合わせて小数点以下2桁表示
+            },
+            hide_index=True,
+            use_container_width=True,
+            num_rows="fixed",
+            key="ingredient_editor" # ユニークなキー
+        )
         
-        # # st.session_state.edited_ingredients_df をデータエディターの最新の状態に更新
-        # st.session_state.edited_ingredients_df = edited_df_from_editor.copy()
+        # st.session_state.edited_ingredients_df をデータエディターの最新の状態に更新
+        st.session_state.edited_ingredients_df = edited_df_from_editor.copy()
 
-        # # 「変更を保存」ボタン
-        # if st.button("変更を保存", key="save_changes_btn"):
-        #     changes_detected = False
-        #     for idx in range(len(df_ingredients)):
-        #         original_quantity = df_ingredients.loc[idx, "数量"]
-        #         edited_quantity = st.session_state.edited_ingredients_df.loc[idx, "数量"]
+        # 「変更を保存」ボタン
+        if st.button("変更を保存", key="save_changes_btn"):
+            changes_detected = False
+            for idx in range(len(df_ingredients)):
+                original_quantity = df_ingredients.loc[idx, "数量"]
+                edited_quantity = st.session_state.edited_ingredients_df.loc[idx, "数量"]
 
-        #         # 比較時に浮動小数点数の丸め誤差を考慮
-        #         if original_quantity != edited_quantity:
-        #             ingredient_id_to_update = st.session_state.edited_ingredients_df.loc[idx, "ID"]
-        #             update_ingredient_quantity(ingredient_id_to_update, edited_quantity)
-        #             changes_detected = True
+                # 比較時に浮動小数点数の丸め誤差を考慮
+                if original_quantity != edited_quantity:
+                    ingredient_id_to_update = st.session_state.edited_ingredients_df.loc[idx, "ID"]
+                    update_ingredient_quantity(ingredient_id_to_update, edited_quantity)
+                    changes_detected = True
             
-        #     if changes_detected:
-        #         print("DEBUG: Changes detected and saved.")
-        #         st.rerun()
-        #         st.success("全ての変更が保存されました！")
-        #         st.session_state.db_data_updated = True # データベース更新フラグを立てる
-        #     else:
-        #         st.info("変更はありませんでした。")
+            if changes_detected:
+                print("DEBUG: Changes detected and saved.")
+                st.rerun()
+                st.success("全ての変更が保存されました！")
+                st.session_state.db_data_updated = True # データベース更新フラグを立てる
+            else:
+                st.info("変更はありませんでした。")
 
 
     else:
