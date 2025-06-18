@@ -116,13 +116,13 @@ def show_recipe_proposer():
 
     # --- 献立提案セクション ---
     # Google Gemini APIの設定
-    api_key = st.secrets["GOOGLE_API_KEY"]
-    # api_key = os.environ.get("GOOGLE_API_KEY")
+    # api_key = st.secrets["GOOGLE_API_KEY"]
+    api_key = os.environ.get("GOOGLE_API_KEY")
     gemini_configured_successfully = False
     if api_key:
         try:
             genai.configure(api_key=api_key)
-            model = genai.GenerativeModel('gemini-1.5-flash')
+            # model = genai.GenerativeModel('gemini-1.5-flash')
             gemini_configured_successfully = True
         except Exception as e:
             st.error(f"Gemini APIの設定中にエラーが発生しました: {e}")
@@ -136,6 +136,10 @@ def show_recipe_proposer():
     col_menu_input, col_menu_output = st.columns(2)
 
     with col_menu_input:
+        # モデルを選択するためのUIを追加 
+        model_options = ["gemini-1.5-flash", "gemini-2.0-Flash","gemini-2.5-Flash",]
+        selected_model = st.selectbox("AIモデル:", model_options)
+        # 提案内容の選択ボタン
         menu_options = ["主菜", "副菜", "汁物", "デザート"]
         size_options = ["1人前" , "2人前", "3人前", "4人前"]
         preferences_opions = ["和食", "洋食", "中華", "イタリアン", "その他"]
