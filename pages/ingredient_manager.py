@@ -1,130 +1,150 @@
-import streamlit as st
-import sqlite3
-from datetime import datetime, timedelta
-# import google.generativeai as genai # このファイルではGeminiは使わないのでコメントアウトか削除推奨
-# import json # このファイルでは使わないのでコメントアウトか削除推奨
 import os
+import streamlit as st
 import pandas as pd
+from datetime import datetime, timedelta
+import boto3  # AWSのライブラリ
+import uuid   # DynamoDBのユニークなIDを生成するため
 
-# --- データベース関連の関数 ---
-DATABASE_NAME = "food_items.db"
+# --- DynamoDB関連の関数 ---
+AWS_DEFAULT_REGION = "ap-northeast-1" # あなたが使用するAWSリージョン (例: 東京)
+DYNAMODB_TABLE_NAME = "food_items" # あなたが作成したDynamoDBのテーブル名
 
-def init_db():
-    """データベースを初期化し、テーブルを作成します。"""
-    conn = sqlite3.connect(DATABASE_NAME)
-    cursor = conn.cursor()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS food_items (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            purchase_date TEXT NOT NULL,
-            expiry_date TEXT NOT NULL,
-            quantity TEXT NOT NULL
-        )
-    """)
-    conn.commit()
-    conn.close()
-
-def get_db_connection():
-    conn = sqlite3.connect(DATABASE_NAME) # 'food_items.db' ではなく DATABASE_NAME を使用
-    conn.row_factory = sqlite3.Row
-    return conn
-
-def add_ingredient_to_db(name, purchase_date, expiry_date, quantity):
-    """食材をデータベースに追加します。"""
-    conn = sqlite3.connect(DATABASE_NAME)
-    cursor = conn.cursor()
+def get_dynamodb_table():
+    """DynamoDBへの接続とテーブルオブジェクトを取得します。"""
     try:
-        cursor.execute(
-            "INSERT INTO food_items (name, purchase_date, expiry_date, quantity) VALUES (?, ?, ?, ?)",
-            (name, purchase_date, expiry_date, quantity)
+        # Streamlitのsecretsから認証情報と設定を読み込む
+        aws_access_key_id = st.secrets["aws"]["AWS_ACCESS_KEY_ID"]
+        aws_secret_access_key = st.secrets["aws"]["AWS_SECRET_ACCESS_KEY"]
+        region_name = st.secrets["aws"]["AWS_DEFAULT_REGION"]
+        table_name = st.secrets["aws"]["DYNAMODB_TABLE_NAME"]
+        # aws_access_key_id = os.environ.get("AWS_ACCESS_KEY_ID")
+        # aws_secret_access_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
+        # region_name = os.environ.get("AWS_DEFAULT_REGION")
+        # table_name = os.environ.get("DYNAMODB_TABLE_NAME")
+
+
+
+        # DynamoDBリソースを取得
+        dynamodb = boto3.resource(
+            'dynamodb',
+            aws_access_key_id=aws_access_key_id,
+            aws_secret_access_key=aws_secret_access_key,
+            region_name=region_name
         )
-        conn.commit()
-        st.success("食材が追加されました。")
-    except sqlite3.Error as e:
-        st.error(f"食材の追加中にエラーが発生しました: {e}")
-    finally:
-        conn.close()
+        return dynamodb.Table(table_name)
+    except Exception as e:
+        st.error(f"DynamoDBへの接続に失敗しました: {e}")
+        return None
+
+# DynamoDBではテーブルは事前にコンソールで作成するため、init_dbは不要です。
+def add_ingredient_to_db(name, purchase_date, expiry_date, quantity):
+    """食材をDynamoDBに追加します。"""
+    table = get_dynamodb_table()
+    if table:
+        try:
+            # DynamoDBの項目（アイテム）を一意に識別するためのIDを生成
+            item_id = str(uuid.uuid4())
+            # date型をテキストに編集
+            if not isinstance(purchase_date, str):
+                purchase_date_str = purchase_date.strftime('%Y-%m-%d')
+            else:
+                purchase_date_str = purchase_date
+
+            if not isinstance(expiry_date, str):
+                expiry_date_str = expiry_date.strftime('%Y-%m-%d')
+            else:
+                expiry_date_str = expiry_date
+           
+            table.put_item(
+                Item={
+                    'id': item_id,
+                    'name': name,
+                    'purchase_date': purchase_date_str, # 文字列に変換した値を渡す
+                    'expiry_date': expiry_date_str,     # 文字列に変換した値を渡す
+                    'quantity': quantity
+                }
+            
+            )
+            st.success("食材が追加されました。")
+        except Exception as e:
+            st.error(f"食材の追加中にエラーが発生しました: {e}")
 
 def get_all_ingredients():
-    """データベースからすべての食材を取得し、期限が近い順にソートします。"""
-    conn = sqlite3.connect(DATABASE_NAME)
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, name, purchase_date, expiry_date, quantity FROM food_items ORDER BY expiry_date ASC")
-    rows = cursor.fetchall()
-    conn.close()
-    return rows
+    """DynamoDBからすべての食材を取得します。"""
+    table = get_dynamodb_table()
+    if table:
+        try:
+            # Scanオペレーションはテーブル全体を読み取るため、大規模なテーブルでは注意が必要
+            response = table.scan()
+            # 期限でソート
+            items = sorted(response.get('Items', []), key=lambda x: x.get('expiry_date', ''))
+            # 元のUIと互換性のある形式（タプルのリスト）に変換
+            return [(item['id'], item['name'], item['purchase_date'], item['expiry_date'], item['quantity']) for item in items]
+        except Exception as e:
+            st.error(f"食材の取得中にエラーが発生しました: {e}")
+    return []
 
 def update_ingredient_quantity(ingredient_id, new_quantity):
-    """データベースの食材の数量を更新します。"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    try:
-        cursor.execute('UPDATE food_items SET quantity = ? WHERE id = ?', (new_quantity, ingredient_id))
-        conn.commit()
-        print(f"DEBUG: Successfully committed update for ID={ingredient_id}")
-        st.success(f"ID: {ingredient_id} の数量を {new_quantity} に更新しました。")
-    except sqlite3.Error as e:
-        print(f"DEBUG: Database error during update for ID={ingredient_id}: {e}")
-        st.error(f"数量の更新中にデータベースエラーが発生しました: {e}")
-    finally:
-        conn.close()
-        print(f"DEBUG: Connection closed for ID={ingredient_id}")
+    """DynamoDBの食材の数量を更新します。"""
+    table = get_dynamodb_table()
+    if table:
+        try:
+            table.update_item(
+                Key={'id': ingredient_id},
+                UpdateExpression='SET quantity = :val',
+                ExpressionAttributeValues={':val': new_quantity}
+            )
+            st.success(f"ID: {ingredient_id} の数量を更新しました。")
+        except Exception as e:
+            st.error(f"数量の更新中にエラーが発生しました: {e}")
 
-def delete_ingredient_from_db(ingredient_name_like):
-    """指定された食材をデータベースから削除します（部分一致）。"""
-    conn = sqlite3.connect(DATABASE_NAME)
-    cursor = conn.cursor()
-    try:
-        cursor.execute("DELETE FROM food_items WHERE name LIKE ?", (f"%{ingredient_name_like}%",))
-        deleted_count = cursor.rowcount
-        conn.commit()
-        return deleted_count
-    except sqlite3.Error as e:
-        st.error(f"食材の削除中にエラーが発生しました: {e}")
-        return 0
-    finally:
-        conn.close()
+def delete_ingredient_from_db(ingredient_id):
+    """DynamoDBから指定されたIDの食材を削除します。"""
+    table = get_dynamodb_table()
+    if table:
+        try:
+            table.delete_item(
+                Key={'id': ingredient_id}
+            )
+            return 1 # 成功した場合は1を返す
+        except Exception as e:
+            st.error(f"食材の削除中にエラーが発生しました: {e}")
+    return 0
 
 def clear_database():
-    """food_items テーブルのデータをすべて削除します。"""
-    conn = sqlite3.connect(DATABASE_NAME)
-    cursor = conn.cursor()
-    try:
-        cursor.execute("DELETE FROM food_items")
-        conn.commit()
-        st.success("データベースの食材データを初期化しました。")
-    except sqlite3.Error as e:
-        st.error(f"データベースの初期化中にエラーが発生しました: {e}")
-    finally:
-        conn.close()
+    """DynamoDBのテーブルからすべてのアイテムを削除します。"""
+    table = get_dynamodb_table()
+    if table:
+        try:
+            with table.batch_writer() as batch:
+                # Scanで全アイテムのキーを取得してバッチ削除
+                response = table.scan(ProjectionExpression="id")
+                for item in response['Items']:
+                    batch.delete_item(Key={'id': item['id']})
+            st.success("データベースの食材データを初期化しました。")
+        except Exception as e:
+            st.error(f"データベースの初期化中にエラーが発生しました: {e}")
+    return 0
+
 
 # --- Streamlit UI ---
 def show_ingredient_manager():
-    st.header("献立生成AIアプリ")
+    st.header("食材管理 (DynamoDB版)")
     st.write("このアプリは、食材の管理と献立の提案を行います。")
-    st.sidebar.header("設定")   
+    st.sidebar.header("設定")
 
-    # データベースの初期化（初回実行時のみ）
-    if 'db_initialized' not in st.session_state:
-        init_db()
-        st.session_state.db_initialized = True # この行は init_db() の直後に移動
-    # editor_key_counter は、db_initialized の初期化とは別に、必ず存在するようにチェック
-    if 'editor_key_counter' not in st.session_state:
-        st.session_state.editor_key_counter = 0
-
+    # (既存のUIコードはここにそのままペースト... フォーム、リスト表示など)
     # --- 食材追加セクション ---
     st.header("食材の追加")
     with st.form("add_ingredient_form", clear_on_submit=True):
         col1, col2 = st.columns(2)
         with col1:
-            name = st.text_input("食材名:", key="ingredient_name_input")
-            purchase_date_str = st.text_input("購入日 (YYYY-MM-DD):", value=datetime.now().strftime("%Y-%m-%d"), key="purchase_date_input")
+            name = st.text_input("食材名:")
+            purchase_date_str = st.text_input("購入日 (YYYY-MM-DD):", value=datetime.now().strftime("%Y-%m-%d"))
         with col2:
-            expiry_date_str = st.text_input("期限 (YYYY-MM-DD):", value=(datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d"), key="expiry_date_input")
-            quantity = st.text_input("数量:",  key="quantity_input")
+            expiry_date_str = st.text_input("期限 (YYYY-MM-DD):", value=(datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d"))
+            quantity = st.text_input("数量:")
         submitted = st.form_submit_button("食材を追加")
-
 
     if submitted:
         if not all([name, purchase_date_str, expiry_date_str, quantity]):
@@ -134,166 +154,64 @@ def show_ingredient_manager():
                 datetime.strptime(purchase_date_str, "%Y-%m-%d")
                 datetime.strptime(expiry_date_str, "%Y-%m-%d")
                 add_ingredient_to_db(name, purchase_date_str, expiry_date_str, quantity)
+                st.rerun()
             except ValueError:
-                st.error("日付はYYYY-MM-DD形式、数量は数値で入力してください。")
+                st.error("日付はYYYY-MM-DD形式で入力してください。")
 
     # --- 現在の食材リスト表示セクション ---
     st.header("現在の食材リスト")
     ingredients_data = get_all_ingredients()
-    if ingredients_data: # 食材データがある場合のみdata_editorと編集ロジックを表示
+    if ingredients_data:
         df_ingredients = pd.DataFrame(ingredients_data, columns=["ID", "食材名", "購入日", "期限", "数量"])
-        df_ingredients["購入日"] = pd.to_datetime(df_ingredients["購入日"]).dt.date # datetimeオブジェクトからdateオブジェクトに変換
-        df_ingredients["期限"] = pd.to_datetime(df_ingredients["期限"]).dt.date   # datetimeオブジェクトからdateオブジェクトに変換
 
-        # st.session_state.edited_ingredients_df を初期化または更新
-        # ここが重要: 初回ロード時、またはデータベース更新後に元のdf_ingredientsで初期化
-        if 'edited_ingredients_df' not in st.session_state or st.session_state.get('db_data_updated', False):
-            st.session_state.edited_ingredients_df = df_ingredients.copy()
-            # データベースが更新された場合、エディターのキーも更新して強制的に再描画させる
-            if st.session_state.get('db_data_updated', False):
-                st.session_state.editor_key_counter += 1
-            st.session_state.db_data_updated = False # フラグをリセット
-
-        # if 'edited_ingredients_df' not in st.session_state or st.session_state.get('db_data_updated', False):
-        #     st.session_state.edited_ingredients_df = df_ingredients.copy()
-        #     st.session_state.db_data_updated = False # フラグをリセット
-
-        st.write("数量を直接編集できます。変更は「変更を保存」ボタンで確定されます。")
-
-        # st.data_editorでデータフレームを表示し、編集を許可する
-        # ユーザーが編集を行うと、st.session_state.edited_ingredients_df が更新される
-        edited_df_from_editor = st.data_editor(
-            st.session_state.edited_ingredients_df, # 初期値としてセッションステートの編集済みDataFrameを渡す
+        st.write("数量を直接編集できます。")
+        edited_df = st.data_editor(
+            df_ingredients,
             column_config={
-                "ID": st.column_config.NumberColumn("ID", help="食材のID", disabled=True),
-                "食材名": st.column_config.TextColumn("食材名", help="食材の名前", disabled=True),
-                "購入日": st.column_config.DateColumn("購入日", help="購入した日付", format="YYYY/MM/DD", disabled=True),
-                "期限": st.column_config.DateColumn("期限", help="食材の賞味期限または消費期限", format="YYYY/MM/DD", disabled=True),
-                "数量": st.column_config.TextColumn("数量",  help="食材の数量" , disabled= False), # REAL型に合わせて小数点以下2桁表示
+                "ID": st.column_config.TextColumn("ID", disabled=True),
+                "食材名": st.column_config.TextColumn("食材名", disabled=True),
+                "購入日": st.column_config.TextColumn("購入日", disabled=True),
+                "期限": st.column_config.TextColumn("期限", disabled=True),
+                "数量": st.column_config.TextColumn("数量", disabled=False),
             },
             hide_index=True,
             use_container_width=True,
-            num_rows="fixed",
-            key="ingredient_editor" # ユニークなキー
+            key="ingredient_editor"
         )
-        
-        # st.session_state.edited_ingredients_df をデータエディターの最新の状態に更新
-        st.session_state.edited_ingredients_df = edited_df_from_editor.copy()
 
-        # 「変更を保存」ボタン
-        if st.button("変更を保存", key="save_changes_btn"):
-            changes_detected = False
-            for idx in range(len(df_ingredients)):
-                original_quantity = df_ingredients.loc[idx, "数量"]
-                edited_quantity = st.session_state.edited_ingredients_df.loc[idx, "数量"]
-
-                # 比較時に浮動小数点数の丸め誤差を考慮
-                if original_quantity != edited_quantity:
-                    ingredient_id_to_update = st.session_state.edited_ingredients_df.loc[idx, "ID"]
-                    update_ingredient_quantity(ingredient_id_to_update, edited_quantity)
-                    changes_detected = True
+        if st.button("変更を保存"):
+            for i in range(len(edited_df)):
+                if not df_ingredients.iloc[i].equals(edited_df.iloc[i]):
+                    if df_ingredients.iloc[i]['数量'] != edited_df.iloc[i]['数量']:
+                        update_ingredient_quantity(edited_df.iloc[i]['ID'], edited_df.iloc[i]['数量'])
+            st.success("変更が保存されました。")
+            st.rerun()
             
-            if changes_detected:
-                print("DEBUG: Changes detected and saved.")
-                st.rerun()
-                st.success("全ての変更が保存されました！")
-                st.session_state.db_data_updated = True # データベース更新フラグを立てる
-            else:
-                st.info("変更はありませんでした。")
-
-
     else:
         st.info("現在、食材は登録されていません。")
-
-
-    # if ingredients_data: # 食材データがある場合のみdata_editorと編集ロジックを表示
-    #     data_for_df = []
-    #     for row in ingredients_data:
-    #         data_for_df.append(list(row))
-
-    #     df_ingredients = pd.DataFrame(data_for_df, columns=["ID", "食材名", "購入日", "期限", "数量"])
-    #     df_ingredients["購入日"] = pd.to_datetime(df_ingredients["購入日"])
-    #     df_ingredients["期限"] = pd.to_datetime(df_ingredients["期限"])
-
-    #     st.write("数量を直接編集できます。")
-
-    #     edited_df = st.data_editor(
-    #         df_ingredients,
-    #         column_config={
-    #             "ID": st.column_config.NumberColumn("ID", help="食材のID", disabled=True),
-    #             "食材名": st.column_config.TextColumn("食材名", help="食材の名前", disabled=True),
-    #             "購入日": st.column_config.DateColumn("購入日", help="購入した日付", format="YYYY/MM/DD", disabled=True),
-    #             "期限": st.column_config.DateColumn("期限", help="食材の賞味期限または消費期限", format="YYYY/MM/DD", disabled=True),
-    #             "数量": st.column_config.NumberColumn("数量", help="食材の数量", min_value=0.1, step=0.1, format="%.2f"), # REAL型に合わせて小数点以下2桁表示
-    #         },
-    #         hide_index=True,
-    #         use_container_width=True,
-    #         num_rows="fixed",
-    #         key="ingredient_editor" # ユニークなキー
-    #     )
-    #     # print("edited_df:", edited_df) # デバッグ用に編集後のDataFrameを表示
-    # if not df_ingredients.equals(edited_df):
-    #     st.write("変更を検出しました！")
-    #     for idx in range(len(df_ingredients)):
-    #         if df_ingredients.loc[idx, "数量"] != edited_df.loc[idx, "数量"]:
-    #             ingredient_id_to_update = edited_df.loc[idx, "ID"]
-    #             new_quantity_value = edited_df.loc[idx, "数量"]
-    #             # print(ingredient_id_to_update, new_quantity_value) # デバッグ用に変更されたIDと数量を表示
-    #             update_ingredient_quantity(ingredient_id_to_update, new_quantity_value)
-    #     st.rerun()
-   
-
-
-
+    
     # --- 個別の食材削除セクション ---
-    st.subheader("個別の食材を削除")
-    st.write("削除したい食材のIDを入力して削除ボタンを押すか、以下のリストから直接削除してください。")
-
-    # 現在の食材リストを再度取得して表示（削除ボタン用）
-    current_ingredients_for_delete = get_all_ingredients()
-    if current_ingredients_for_delete:
-        df_delete_view = pd.DataFrame(current_ingredients_for_delete, columns=["ID", "食材名", "購入日", "期限", "数量"])
-        
-        # # IDで削除するフォーム
-        # delete_id_input = st.number_input("削除する食材のID", min_value=1, step=1, key="delete_id_input_ing_mgr")
-        # if st.button("IDで削除", key="delete_by_id_btn_ing_mgr"):
-        #     # IDによる削除関数は名前ではなくIDを受け取るように修正が必要
-        #     # 例: delete_ingredient_by_id(delete_id_input) という関数を作成
-        #     # 現在の delete_ingredient_from_db はnameを引数にとるので、IDで削除する関数を別に定義するか、既存を修正
-        #     # ここでは仮にIDをname_likeとして渡し、部分一致で意図せず複数削除されるのを避けるために警告を出すか、ID検索用の関数を実装
-        #     st.warning("現在、IDによる直接削除関数は実装されていません。食材名での削除か、以下のリストのボタンをご利用ください。")
-        #     st.info("IDで削除するには、`delete_ingredient_by_id(ingredient_id)`のような新しい関数を実装する必要があります。")
-
-        st.markdown("---")
-        st.subheader("リストから削除")
-        # 各行に削除ボタンを配置する
+    st.subheader("リストから削除")
+    if ingredients_data:
+        df_delete_view = pd.DataFrame(ingredients_data, columns=["ID", "食材名", "購入日", "期限", "数量"])
         for index, row in df_delete_view.iterrows():
-            col1, col2, col3, col4, col5, col6 = st.columns([0.5, 2, 1.5, 1.5, 1, 1])
-
-            with col1:
-                st.write(row["ID"])
-            with col2:
-                st.write(row["食材名"])
-            with col3:
-                st.write(row["購入日"])
-            with col4:
-                st.write(row["期限"])
-            with col5:
-                st.write(row["数量"]) 
+            col1, col2, col3, col4, col5, col6 = st.columns([1.5, 2, 1.5, 1.5, 1, 1])
+            with col1: st.write(row["ID"])
+            with col2: st.write(row["食材名"])
+            with col3: st.write(row["購入日"])
+            with col4: st.write(row["期限"])
+            with col5: st.write(row["数量"])
             with col6:
                 if st.button("削除", key=f"delete_row_btn_ing_mgr_{row['ID']}"):
-                    # ここでは食材名を引数にとる delete_ingredient_from_db を使用
-                    # 完全一致で削除したい場合は、別途関数を定義することをお勧めします
-                    deleted_count = delete_ingredient_from_db(row["食材名"])
-                    if deleted_count > 0:
-                        st.success(f"'{row['食材名']}' を削除しました。")
-                    else:
-                        st.error(f"'{row['食材名']}' の削除に失敗しました。")
-                    st.rerun() # 削除後にリストを更新
-
+                    delete_ingredient_from_db(row['ID']) # 名前ではなくIDで削除
+                    st.success(f"'{row['食材名']}' を削除しました。")
+                    st.rerun()
     else:
         st.info("削除する食材がありません。")
 
-    # データベースの初期化ボタン
-    st.sidebar.button("全食材データをクリア", on_click=clear_database)
+    if st.sidebar.button("全食材データをクリア"):
+        clear_database()
+        st.rerun()
+
+
 
