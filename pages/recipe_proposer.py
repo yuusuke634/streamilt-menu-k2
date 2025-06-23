@@ -228,7 +228,7 @@ def show_recipe_proposer():
                     st.error(f"Gemini API呼び出し中にエラーが発生しました: {e}")
                     suggested_menu = "献立の生成に失敗しました。"
 
-                st.session_state.current_suggested_menu = suggested_menu
+                st.session_state.current_suggested_menu = response_stream.text
                 st.rerun()
  
     # with col_menu_output:
