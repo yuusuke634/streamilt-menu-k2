@@ -9,6 +9,7 @@ import uuid   # DynamoDBのユニークなIDを生成するため
 AWS_DEFAULT_REGION = "ap-northeast-1" # あなたが使用するAWSリージョン (例: 東京)
 DYNAMODB_TABLE_NAME = "food_items" # あなたが作成したDynamoDBのテーブル名
 
+@st.cache_resource # このデコレータを追加
 def get_dynamodb_table():
     """DynamoDBへの接続とテーブルオブジェクトを取得します。"""
     try:

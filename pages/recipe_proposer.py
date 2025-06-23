@@ -12,6 +12,7 @@ import uuid
 
 # --- DynamoDB関連の関数 ---
 
+@st.cache_resource # このデコレータを追加
 def get_dynamodb_table():
     """DynamoDBへの接続とテーブルオブジェクトを取得します。"""
     try:
@@ -213,8 +214,14 @@ def show_recipe_proposer():
                     """
                     
                     # Gemini API呼び出し
-                    response = model.generate_content(prompt)
-                    suggested_menu = response.text
+                    response_stream = model.generate_content(prompt, stream=True)
+
+                # ★変更点: st.write_streamで結果をリアルタイム表示
+                    st.subheader("提案された献立:")
+                    st.write_stream(response_stream)
+
+                    # response = model.generate_content(prompt)
+                    # suggested_menu = response.text
                 
                 except Exception as e:
                     # ここで詳細なエラーが表示される
@@ -223,91 +230,12 @@ def show_recipe_proposer():
 
                 st.session_state.current_suggested_menu = suggested_menu
                 st.rerun()
-    # if st.button("献立を提案"):
-    #     if not ingredients_data:
-    #         st.warning("食材がデータベースにありません。献立を提案できません。")
-    #     else:
-    #         with st.spinner("献立を生成中..."):
-    #             ingredient_list_for_prompt = []
-    #             for _, name, _, expiry_date, quantity in ingredients_data:
-    #                 ingredient_list_for_prompt.append(f"{name} (期限: {expiry_date}, 数量: {quantity})")
+ 
+    # with col_menu_output:
+    #     st.subheader("提案された献立:")
+    # if 'current_suggested_menu' in st.session_state and st.session_state.current_suggested_menu:
+    #     st.text_area("献立", st.session_state.current_suggested_menu, height=300, key="menu_output_area")
 
-    #             prompt = f"""
-    #             以下の食材・分量・好み・その他条件を使用して、{menu_type if menu_type else ''}献立を提案してください。
-    #             提案は具体的なレシピ名、使用する食材、簡単な調理手順を含めてください。
-    #             食材リストにない食材は使用しないでください。使用する場合は最後に何を買うべきか提案してください。
-    #             献立検討時には以下リンクの情報を参考にして、提案する際には具体的なURLを添付してください。
-    #             https://panasonic.jp/cooking/recipe/autocooker.html
-    #             https://cookpad.com/jp
-    #             期限が近い食材を優先的に使用してください。
-    #             分量: {serving_size if serving_size else '指定なし'}
-    #             好み: {preferences if preferences else '指定なし'}
-    #             その他条件: {others_conditions if others_conditions else 'なし'}
-
-    #             食材リスト:
-    #             {', '.join(ingredient_list_for_prompt)}
-
-    #             提案例:
-    #             レシピ名: 鶏肉と野菜の炒め物
-    #             使用食材: 鶏もも肉、玉ねぎ、ピーマン、にんじん
-    #             調理手順: 1. 鶏肉と野菜を切る。2. フライパンで炒める。3. 塩コショウで味を調える。
-    #             """
-
-    #             if selected_model:
-    #                 try:
-    #                     # Gemini API呼び出し
-    #                     response = selected_model.generate_content(prompt)
-    #                     suggested_menu = response.text
-    #                 except Exception as e:
-    #                     st.error(f"Gemini API呼び出し中にエラーが発生しました: {e}")
-    #                     suggested_menu = "献立の生成に失敗しました。"
-    #             else:
-    #                 # ダミー応答
-    #                 suggested_menu = f"""
-    #                 レシピ名: 鶏肉と野菜の彩り炒め (ダミー)
-    #                 使用食材: 鶏もも肉、玉ねぎ、ピーマン、にんじん、キャベツ
-    #                 調理手順: ダミーの調理手順です。
-
-    #                 レシピ名: 大根と豚バラの煮物 (ダミー)
-    #                 使用食材: 大根、豚バラ肉、生姜
-    #                 調理手順: ダミーの調理手順です。
-    #                 """
-    #             st.session_state.current_suggested_menu = suggested_menu
-    #             st.rerun() # 献立表示を更新するため再実行
-
-    with col_menu_output:
-        st.subheader("提案された献立:")
-    if 'current_suggested_menu' in st.session_state and st.session_state.current_suggested_menu:
-        st.text_area("献立", st.session_state.current_suggested_menu, height=300, key="menu_output_area")
-        # if st.button("この献立を選択"):
-        #     suggested_menu_text = st.session_state.current_suggested_menu
-        #     lines = suggested_menu_text.split('\n')
-        #     used_ingredients = set()
-        #     for line in lines:
-        #         if "使用食材:" in line:
-        #             ingredients_str = line.split("使用食材:")[1].strip()
-        #             # カンマ、句読点、スペースで分割し、重複を避けるためにセットに追加
-        #             for item in ingredients_str.replace("、", ",").replace(" ", "").split(','):
-        #                 if item:
-        #                     used_ingredients.add(item.strip())
-
-    #         if not used_ingredients:
-    #             st.warning("使用された食材を特定できませんでした。")
-    #         else:
-    #             # Streamlitではmessagebox.askyesnoの代わりに確認UIを構築
-    #             st.write(f"以下の食材をデータベースから削除しますか？\n{', '.join(used_ingredients)}")
-    #             if st.button("はい、削除します"):
-    #                 total_deleted_count = 0
-    #                 for ingredient_name in used_ingredients:
-    #                     deleted_count = delete_ingredient_from_db(ingredient_name)
-    #                     total_deleted_count += deleted_count
-    #                 st.success(f"{total_deleted_count}個の食材がデータベースから削除されました。")
-    #                 st.session_state.current_suggested_menu = "" # 献立をクリア
-    #                 st.rerun() # リストを更新するため再実行
-    #             elif st.button("いいえ、削除しません"):
-    #                 st.info("食材の削除はキャンセルされました。")
-    # else:
-    #     st.info("献立を提案してください。")
 
 if __name__ == "__main__":
     show_recipe_proposer()

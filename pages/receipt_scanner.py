@@ -15,7 +15,7 @@ from azure.cognitiveservices.vision.computervision import ComputerVisionClient
 from msrest.authentication import CognitiveServicesCredentials
 
 # --- DynamoDB関連の関数 ---
-
+@st.cache_resource # このデコレータを追加
 def get_dynamodb_table():
     """DynamoDBへの接続とテーブルオブジェクトを取得します。"""
     try:
