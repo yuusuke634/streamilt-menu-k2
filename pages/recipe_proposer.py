@@ -214,27 +214,24 @@ def show_recipe_proposer():
                     """
                     
                     # Gemini API呼び出し
-                    response_stream = model.generate_content(prompt, stream=True)
+                    # response_stream = model.generate_content(prompt, stream=True)
 
-                # ★変更点: st.write_streamで結果をリアルタイム表示
-                    st.subheader("提案された献立:")
-                    st.write_stream(response_stream)
-
-                    # response = model.generate_content(prompt)
-                    # suggested_menu = response.text
+                
+                    response = model.generate_content(prompt)
+                    suggested_menu = response.text
                 
                 except Exception as e:
                     # ここで詳細なエラーが表示される
                     st.error(f"Gemini API呼び出し中にエラーが発生しました: {e}")
                     suggested_menu = "献立の生成に失敗しました。"
 
-                st.session_state.current_suggested_menu = response_stream.text
+                st.session_state.current_suggested_menu = suggested_menu
                 st.rerun()
  
-    # with col_menu_output:
-    #     st.subheader("提案された献立:")
-    # if 'current_suggested_menu' in st.session_state and st.session_state.current_suggested_menu:
-    #     st.text_area("献立", st.session_state.current_suggested_menu, height=300, key="menu_output_area")
+    with col_menu_output:
+        st.subheader("提案された献立:")
+    if 'current_suggested_menu' in st.session_state and st.session_state.current_suggested_menu:
+        st.text_area("献立", st.session_state.current_suggested_menu, height=300, key="menu_output_area")
 
 
 if __name__ == "__main__":
